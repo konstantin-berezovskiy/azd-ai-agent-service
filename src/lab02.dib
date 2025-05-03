@@ -1,0 +1,142 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp","languageName":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
+
+#!csharp
+
+#r "nuget: Azure.AI.Projects, *-*"
+#r "nuget: Azure.Identity"
+#r "nuget: dotenv.net"
+
+#!csharp
+
+using System.IO;
+using Azure.AI.Projects;
+using Azure.Identity;
+using Azure;
+using dotenv.net;
+using dotenv.net.Utilities;
+
+#!csharp
+
+DotEnv.Load();
+var connectionString = EnvReader.GetStringValue("AZURE_AI_AGENT_PROJECT_CONNECTION_STRING");
+var deployName = EnvReader.GetStringValue("AZURE_AI_AGENT_MODEL_DEPLOYMENT_NAME");
+
+#!csharp
+
+AgentsClient client = new AgentsClient(connectionString, new DefaultAzureCredential());
+
+#!csharp
+
+Agent agent = await client.CreateAgentAsync(
+    model: deployName,
+    name: "data-agent",
+    instructions: "You are an AI agent that analyzes the data in the file that has been uploaded. If the user requests a chart, create it and save it as a .png file.",
+    tools: [ new CodeInterpreterToolDefinition() ]
+);
+
+#!csharp
+
+AgentThread thread = await client.CreateThreadAsync();
+
+#!csharp
+
+AgentFile uploadedAgentFile = await client.UploadFileAsync(
+    filePath: "data.txt",
+    purpose: AgentFilePurpose.Agents
+);
+
+#!csharp
+
+var attachment = new MessageAttachment(fileId: uploadedAgentFile.Id, tools: [ new CodeInterpreterToolDefinition() ]);
+
+#!csharp
+
+async Task AddMessageToThread(string message, IEnumerable<MessageAttachment> attachments = null) {
+    await client.CreateMessageAsync(
+        thread.Id,
+        MessageRole.User,
+        content: message,
+        attachments: attachments ?? Enumerable.Empty<MessageAttachment>()
+    );
+}
+await AddMessageToThread("What's the category with the highest cost?", [ attachment ]);
+
+#!csharp
+
+async Task RunAndWait() {
+    ThreadRun run = await client.CreateRunAsync(thread.Id, agent.Id);
+    do
+    {
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        run = await client.GetRunAsync(thread.Id, run.Id);
+    }
+    while (run.Status == RunStatus.Queued
+        || run.Status == RunStatus.InProgress);
+}
+await RunAndWait();
+
+#!csharp
+
+async Task ShowResult() {
+    PageableList<ThreadMessage> response = await client.GetMessagesAsync(thread.Id);
+    IReadOnlyList<ThreadMessage> messages = response.Data;
+    foreach (ThreadMessage threadMessage in messages)
+    {
+        Console.Write($"{threadMessage.CreatedAt:yyyy-MM-dd HH:mm:ss} - {threadMessage.Role,10}: ");
+        foreach (MessageContent contentItem in threadMessage.ContentItems)
+        {
+            if (contentItem is MessageTextContent textItem)
+            {
+                Console.Write(textItem.Text);
+            }
+            Console.WriteLine();
+        }
+    }
+}
+await ShowResult();
+
+#!csharp
+
+async Task Chat(string message)
+{
+    await AddMessageToThread(message);
+    await RunAndWait();
+    await ShowResult();
+}
+await Chat("Create a pie chart showing cost by category");
+
+#!csharp
+
+async Task SaveGeneratedFile(string fileName) {
+    PageableList<ThreadMessage> response = await client.GetMessagesAsync(thread.Id);
+    IReadOnlyList<ThreadMessage> messages = response.Data;
+    foreach (ThreadMessage threadMessage in messages)
+    {
+        foreach (MessageContent contentItem in threadMessage.ContentItems)
+        {
+            if (contentItem is MessageTextContent textItem && textItem.Annotations.Count > 0)
+            {
+                foreach (var annotation in textItem.Annotations)
+                {
+                    if (annotation is MessageTextFilePathAnnotation pathAnnotation)
+                    {
+                        string fileId = pathAnnotation.FileId;
+                        AgentFile file = await client.GetFileAsync(fileId);
+                        BinaryData fileContent = await client.GetFileContentAsync(fileId);
+                        // string fileName = "output/" + Path.GetFileName(file.Filename);
+                        string outputPath = $"output/{fileName}";
+                        await File.WriteAllBytesAsync(outputPath, fileContent.ToArray());
+                        Console.WriteLine($"saved: {outputPath}");
+                    }
+                }
+            }
+        }
+    }
+}
+await SaveGeneratedFile("chart.png");
+
+#!html
+
+<img src='output/chart.png''>

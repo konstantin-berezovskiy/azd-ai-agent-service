@@ -1,3 +1,1 @@
-This folder is the placeholder for your application source code like .NET, Python, Java,... application you use as part of the demo scenario.
-
-When you have an application, make sure you add it to the azure.yaml file as a service
+This folder contains the necessary artifacts, sample code, sample_logs files and the different Notebooks which can be used for AI-3026 class deliveries or going through them as labs if you are a learner.

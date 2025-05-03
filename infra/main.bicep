@@ -9,7 +9,15 @@ param environmentName string
 @description('Primary location for all resources')
 param location string
 
-var abbrs = loadJsonContent('./abbreviations.json')
+
+@description('Unique identifier for the resource instance. This is used to create unique names for resources.')
+
+param modelName string = 'gpt-4o'
+param modelVersion string = '2024-11-20'
+param capacity int = 50 // 1000 K TPM = 1 M TPM
+param deploymentType string = 'GlobalStandard'
+
+//var abbrs = loadJsonContent('./abbreviations.json')
 
 // Tags that should be applied to all resources.
 // 
@@ -29,16 +37,20 @@ resource rg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
 }
 
 // Add resources to be provisioned below. This can be actual resources, or if you follow the modular approach, create a module and point to the module.bicep file, like this example:
-//module trafficmgr './trafficmgr.bicep' = {
-//  name: 'resources'
-//  scope: rg
-//  params: {
-//    uniqueDnsName: 'tmlab-${resourceToken}'
-//    location: location
-//    tags: tags
-//    environmentName: environmentName
-//  }
-//}
+module aiproj './aiproj.bicep' = {
+  name: 'resources'
+  scope: rg
+  params: {
+    instanceId: 'ai3026${resourceToken}'
+    modelName: modelName
+    modelVersion: modelVersion
+    deploymentName: modelName
+    capacity: capacity
+    deploymentType: deploymentType
+    location: location
+
+  }
+}
 
 // Add outputs from the deployment here, if needed.
 //
@@ -50,3 +62,5 @@ resource rg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
 // To see these outputs, run `azd env get-values`,  or `azd env get-values --output json` for json output.
 output AZURE_LOCATION string = location
 output AZURE_TENANT_ID string = tenant().tenantId
+output AZURE_AI_AGENT_PROJECT_CONNECTION_STRING string = aiproj.outputs.projconnstring
+output AZURE_AI_AGENT_MODEL_DEPLOYMENT_NAME string = aiproj.outputs.aiagentmodelname

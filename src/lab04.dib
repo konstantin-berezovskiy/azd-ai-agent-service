@@ -1,0 +1,99 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
+
+#!csharp
+
+// https://learn.microsoft.com/en-us/semantic-kernel/frameworks/agent/azure-ai-agent?pivots=programming-language-csharp
+
+// https://github.com/microsoft/semantic-kernel/blob/main/dotnet/samples/GettingStartedWithAgents/README.md
+
+#!csharp
+
+#r "nuget: Microsoft.SemanticKernel.Agents.AzureAI, *-*"
+#r "nuget: Microsoft.SemanticKernel"
+#r "nuget: Azure.Identity"
+#r "nuget: dotenv.net"
+
+#!csharp
+
+using dotenv.net;
+using dotenv.net.Utilities;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Agents;
+using Microsoft.SemanticKernel.Agents.AzureAI;
+using Microsoft.SemanticKernel.ChatCompletion;
+using Azure.AI.Projects;
+using Azure.Identity;
+
+#!csharp
+
+DotEnv.Load();
+var connectionString = EnvReader.GetStringValue("AZURE_AI_AGENT_PROJECT_CONNECTION_STRING");
+var deployName = EnvReader.GetStringValue("AZURE_AI_AGENT_MODEL_DEPLOYMENT_NAME");
+
+#!csharp
+
+#pragma warning disable SKEXP0110
+AIProjectClient client = AzureAIAgent.CreateAzureAIClient(connectionString, new DefaultAzureCredential());
+
+#!csharp
+
+AgentsClient agentsClient = client.GetAgentsClient();
+
+#!csharp
+
+var instructions = """
+    You are an AI assistant for expense claim submission.
+    When a user submits expenses data and requests an expense claim, 
+    use the plug-in function to send an email to expenses@contoso.com 
+    with the subject 'Expense Claim`and a body that contains itemized expenses with a total.
+    Then confirm to the user that you've done so.
+    """;
+
+// 1. Define an agent on the Azure AI agent service
+
+Azure.AI.Projects.Agent azureAIProjectAgent = agentsClient.CreateAgent(
+    model: deployName,
+    name: "expenseAgent",
+    instructions: instructions
+);
+
+#!csharp
+
+class EmailPlugin
+{
+    [KernelFunction("SendEmail")]
+    public static void SendEmail(string to, string subject, string body)
+    {
+        // Simulate sending an email
+        Console.WriteLine($"""
+            to: {to}
+            Subject: {subject}
+            {body}
+        """
+        );
+    }
+}
+var emailPlugin = KernelPluginFactory.CreateFromType<EmailPlugin>();
+
+#!csharp
+
+#pragma warning disable SKEXP0110
+
+// 2. Create a Semantic Kernel agent based on the agent definition
+AzureAIAgent agent = new(azureAIProjectAgent, agentsClient, plugins: [emailPlugin]);
+
+#!csharp
+
+#pragma warning disable SKEXP0110
+
+Microsoft.SemanticKernel.Agents.AgentThread agentThread = new AzureAIAgentThread(agent.Client);
+
+#!csharp
+
+ChatMessageContent message = new(AuthorRole.User, "Submit an expense claim. I spent $100 on travel and $50 on food.");
+await foreach (ChatMessageContent response in agent.InvokeAsync(message, agentThread))
+{
+    Console.WriteLine(response.Content);
+}

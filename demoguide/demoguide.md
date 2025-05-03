@@ -7,7 +7,7 @@
 
 [comment]: <> (this is the section for the Note: item; please do not make any changes here)
 ***
-### <your scenario title here>
+### Azure AI Foundry with AI Agent Service
 
 <div style="background: lightgreen; 
             font-size: 14px; 
@@ -27,21 +27,13 @@
 
 Provide a bullet list of the Resource Group and all deployed resources with name and brief functionality within the scenario. 
 
-* rg-%azdenvironmentname - Azure Resource Group.
-* TMLABAppSvcPlan-%region% - Azure App Service Plan in each region
-* TMLABWebApp-%region% - Azure App Service with static HTML webpage in each region
-* TMProfile - Traffic Manager Profile with endpoints
+* TBD
 
 <add a screenshot of the deployed Resource Group with resources>
 
 <img src="https://raw.githubusercontent.com/petender/azd-tdd-starter/refs/heads/main/demoguide/TM/screenshot1.png" alt="Traffic Manager Resource Group" style="width:70%;">
 <br></br>
 
-<img src="https://raw.githubusercontent.com/petender/azd-tdd-starter/refs/heads/main/demoguide/TM/screenshot2.png" alt="Traffic Manager Profile with Endpoints" style="width:70%;">
-<br></br>
-
-<img src="https://raw.githubusercontent.com/petender/azd-tdd-starter/refs/heads/main/demoguide/TM/screenshot3.png" alt="Sample WebApp" style="width:70%;">
-<br></br>
 
 ### 2. What can I demo from this scenario after deployment
 

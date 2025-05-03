@@ -1,0 +1,179 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"name":"csharp"},{"name":"fsharp","languageName":"F#","aliases":["f#","fs"]},{"name":"html","languageName":"HTML"},{"name":"http","languageName":"HTTP"},{"name":"javascript","languageName":"JavaScript","aliases":["js"]},{"name":"mermaid","languageName":"Mermaid"},{"name":"pwsh","languageName":"PowerShell","aliases":["powershell"]},{"name":"value"}]}}
+
+#!csharp
+
+#r "nuget: Azure.AI.Projects, *-*"
+#r "nuget: Azure.Identity"
+#r "nuget: dotenv.net"
+
+#!csharp
+
+using System.IO;
+using Azure.AI.Projects;
+using Azure.Identity;
+using Azure;
+using dotenv.net;
+using dotenv.net.Utilities;
+
+#!csharp
+
+async Task<string> SubmitSupportTicket(string emailAddress, string description)
+{
+    string ticketNumber = Guid.NewGuid().ToString("N").Substring(0, 6);
+    var fileName = $"output/ticket-{ticketNumber}.txt";
+    var text = $"""
+        Support ticket: {ticketNumber}
+        Submitted by: {emailAddress}
+        Description: {description}
+        """;
+    var messageJson = $$"""
+        {"message": f"Support ticket {{ticketNumber}} submitted. The ticket file is saved as {{fileName}}"}
+        """;
+    await File.WriteAllTextAsync(fileName, text);
+    return messageJson;
+}
+
+#!csharp
+
+using System.Text.Json;
+FunctionToolDefinition submitSupportTicketTool = new(
+    name: "submitSupportTicket",
+    description: "Submits Support Ticket.",
+    parameters: BinaryData.FromObjectAsJson(
+        new
+        {
+            Type = "object",
+            Properties = new
+            {
+                EmailAddress = new
+                {
+                    Type = "string",
+                    Description = "User's email address",
+                },
+                Description = new
+                {
+                    Type = "string",
+                    Description = "User's issue description",
+                },
+            },
+            Required = new[] { "emailAddress", "description" },
+        },
+        new JsonSerializerOptions() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }
+    )
+);
+
+#!csharp
+
+DotEnv.Load();
+var connectionString = EnvReader.GetStringValue("AZURE_AI_AGENT_PROJECT_CONNECTION_STRING");
+var deployName = EnvReader.GetStringValue("AZURE_AI_AGENT_MODEL_DEPLOYMENT_NAME");
+
+#!csharp
+
+AgentsClient client = new AgentsClient(connectionString, new DefaultAzureCredential());
+
+#!csharp
+
+AgentThread thread = await client.CreateThreadAsync();
+
+#!csharp
+
+var instructions = """
+    You are a technical support agent.
+    When a user has a technical issue, you get their email address and a description of the issue.
+    Then you use those values to submit a support ticket using the function available to you.
+    If a file is saved, tell the user the file name.
+    """;
+
+Agent agent = await client.CreateAgentAsync(
+    model: deployName,
+    name: "support-agent",
+    instructions: instructions,
+    tools: [ submitSupportTicketTool ]
+);
+
+#!csharp
+
+async Task<ToolOutput> GetResolvedToolOutput(RequiredToolCall toolCall)
+{
+    if (toolCall is RequiredFunctionToolCall functionToolCall)
+    {
+        using JsonDocument argumentsJson = JsonDocument.Parse(functionToolCall.Arguments);
+        if (nameof(SubmitSupportTicket).Equals(functionToolCall.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            string emailAddressArgument = argumentsJson.RootElement.GetProperty("emailAddress").GetString();
+            string descriptionArgument = argumentsJson.RootElement.GetProperty("description").GetString();
+            return new ToolOutput(functionToolCall, await SubmitSupportTicket(emailAddressArgument, descriptionArgument));
+        }
+    }
+    return null;
+}
+
+#!csharp
+
+async Task AddMessageToThread(string message, IEnumerable<MessageAttachment> attachments = null) {
+    await client.CreateMessageAsync(
+        thread.Id,
+        MessageRole.User,
+        content: message,
+        attachments: attachments ?? Enumerable.Empty<MessageAttachment>()
+    );
+}
+await AddMessageToThread("I have a technical problem");
+
+#!csharp
+
+async Task RunAndWait() {
+    ThreadRun run = await client.CreateRunAsync(thread.Id, agent.Id);
+    do
+    {
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        run = await client.GetRunAsync(thread.Id, run.Id);
+
+        if (run.Status == RunStatus.RequiresAction
+            && run.RequiredAction is SubmitToolOutputsAction submitToolOutputsAction)
+        {
+            List<ToolOutput> toolOutputs = [];
+            foreach (RequiredToolCall toolCall in submitToolOutputsAction.ToolCalls)
+            {
+                toolOutputs.Add(await GetResolvedToolOutput(toolCall));
+            }
+            run = await client.SubmitToolOutputsToRunAsync(run, toolOutputs);
+        }
+    }
+    while (run.Status == RunStatus.Queued
+        || run.Status == RunStatus.InProgress);
+}
+await RunAndWait();
+
+#!csharp
+
+async Task ShowResult() {
+    PageableList<ThreadMessage> response = await client.GetMessagesAsync(thread.Id);
+    IReadOnlyList<ThreadMessage> messages = response.Data;
+    foreach (ThreadMessage threadMessage in messages)
+    {
+        Console.Write($"{threadMessage.CreatedAt:yyyy-MM-dd HH:mm:ss} - {threadMessage.Role,10}: ");
+        foreach (MessageContent contentItem in threadMessage.ContentItems)
+        {
+            if (contentItem is MessageTextContent textItem)
+            {
+                Console.Write(textItem.Text);
+            }
+            Console.WriteLine();
+        }
+    }
+}
+await ShowResult();
+
+#!csharp
+
+async Task Chat(string message)
+{
+    await AddMessageToThread(message);
+    await RunAndWait();
+    await ShowResult();
+}
+await Chat("My email is 'alex@contoso.com' and issue description is 'my computer won't start.'");
