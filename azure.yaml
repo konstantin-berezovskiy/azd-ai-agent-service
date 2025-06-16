@@ -2,8 +2,8 @@
 
 # update the name and metadata.template to match your project
 
-name: azd-tdd-ai3026proj
+name: tdd-azd-ai-agent-service
 metadata:
-  template: azd-tdd-ai3026proj@0.0.1-beta
+  template: tdd-azd-ai-agent-service@1.0.0
 infra:
    provider: "bicep"
