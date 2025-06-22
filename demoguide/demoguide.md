@@ -31,7 +31,7 @@ Provide a bullet list of the Resource Group and all deployed resources with name
 
 <add a screenshot of the deployed Resource Group with resources>
 
-<img src="https://raw.githubusercontent.com/petender/azd-tdd-starter/refs/heads/main/demoguide/TM/screenshot1.png" alt="Traffic Manager Resource Group" style="width:70%;">
+<img src="https://raw.githubusercontent.com/petender/azd-ai-agent-service/refs/heads/main/demoguide/AIFoundrywithAgent.png?raw=true" alt="Azure AI Foundry with Agent Service" style="width:70%;">
 <br></br>
 
 
