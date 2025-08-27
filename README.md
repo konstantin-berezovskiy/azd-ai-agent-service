@@ -19,7 +19,7 @@ mkdir tdd-azd-ai3026proj
 ```
 2. Next, navigate to the new folder.
 ```
-cd tdd-azd-starter
+cd tdd-azd-ai3026proj
 ```
 3. Next, run `azd init` to initialize the deployment.
 ```
